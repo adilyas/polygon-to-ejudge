@@ -11,7 +11,7 @@ from polygon_cli import config as cli_config
 
 from .common import Config, get_ejudge_contest_dir, UnquotedStr
 from .config import PROBLEM_CFG_START, GVALUER_LOCATION, CREATE_STATEMENTS, IMPORT_ALL_SOLUTIONS, CONVERT_EPS, \
-    IMG_STYLE, IMG_SRC_PREFIX, TEXTAREA_INPUT
+    IMG_STYLE, IMG_SRC_PREFIX, TEXTAREA_INPUT, IMPORT_ALL_SOLUTIONS
 from .gvaluer import generate_valuer
 from .statement import import_statement, process_statement_xml
 
@@ -100,6 +100,7 @@ def import_problem(
                 while short_name is None:
                     if str(i) not in short_names:
                         short_name = str(i)
+                        i += 1
         ejudge_problem_id = max_problem_id + 1
 
     if not os.path.exists(download_dir):

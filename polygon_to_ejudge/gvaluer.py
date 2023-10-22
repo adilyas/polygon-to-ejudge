@@ -1,17 +1,20 @@
 from collections import OrderedDict
 import xml.etree.ElementTree as ET
 
-from .config import GVALUER_GLOBAL_PART, GVALUER_GROUP_BEGIN, GVALUER_TESTS, GVALUER_SCORE, GVALUER_REQUIRES, \
-    GVALUER_SET_MARKED, GVALUER_OFFLINE, GVALUER_GROUP_END, FEEDBACK_POLICY
+from .config import GVALUER_GLOBAL_PART, GVALUER_GROUP_BEGIN, GVALUER_TESTS, GVALUER_SCORE, GVALUER_POINTS, \
+    GVALUER_REQUIRES, GVALUER_SET_MARKED, GVALUER_OFFLINE, GVALUER_GROUP_END, FEEDBACK_POLICY, IMPORT_DIFFERENT_POINTS
 
 from .common import Config
 
 
-def get_group_desc(group_id, l, r, score, requires, test_score, sets_marked, offline):
+def get_group_desc(group_id, l, r, score, test_points, requires, test_score, sets_marked, offline):
     res = []
     res.append(GVALUER_GROUP_BEGIN.format(group_id))
     res.append(GVALUER_TESTS.format(l, r))
-    res.append(GVALUER_SCORE.format(test_score, score))
+    if IMPORT_DIFFERENT_POINTS and test_score != '':
+        res.append(GVALUER_POINTS.format(', '.join(map(str, test_points))))
+    else:
+        res.append(GVALUER_SCORE.format(test_score, score))
     if len(requires) > 0:
         res.append(GVALUER_REQUIRES.format(', '.join(map(str, requires))))
     if sets_marked != "":
@@ -104,6 +107,7 @@ def generate_valuer(tree: ET.ElementTree, has_groups=True, no_offline=False) -> 
             min_test[group_id],
             max_test[group_id],
             group_score[group_id],
+            test_points[min_test[group_id] - 1:max_test[group_id]],
             group_dependencies[group_id],
             group_points,
             sets_marked,
@@ -125,7 +129,10 @@ def generate_valuer(tree: ET.ElementTree, has_groups=True, no_offline=False) -> 
         curr_group_score = group_score[group_id]
 
         if each_test[group_id]:
-            curr_group_score *= max_test[group_id] - min_test[group_id] + 1
+            if IMPORT_DIFFERENT_POINTS:
+                curr_group_score = sum(test_points[min_test[group_id] - 1:max_test[group_id]])
+            else:
+                curr_group_score *= max_test[group_id] - min_test[group_id] + 1
 
         full_score += curr_group_score
         if feedback[group_id] != "hidden":
@@ -134,7 +141,10 @@ def generate_valuer(tree: ET.ElementTree, has_groups=True, no_offline=False) -> 
         group_score_list = []
         if each_test[group_id]:
             for i in range(min_test[group_id], max_test[group_id] + 1):
-                group_score_list.append(str(group_score[group_id]))
+                if IMPORT_DIFFERENT_POINTS:
+                    group_score_list.append(str(test_points[i - 1]))
+                else:
+                    group_score_list.append(str(group_score[group_id]))
         else:
             for i in range(min_test[group_id], max_test[group_id]):
                 group_score_list.append('0')

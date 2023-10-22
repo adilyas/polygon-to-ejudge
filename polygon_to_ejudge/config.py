@@ -1,14 +1,16 @@
 JUDGES_DIR = '/home/judges/'  # Path to judges folder
 
-GVALUER_LOCATION = '/home/judges/001501/problems/gvaluer'  # Path to compiled gvaluer
+GVALUER_LOCATION = '/home/judges/000001/problems/gvaluer'  # Path to compiled gvaluer
 
-EJUDGE_URL = 'https://ejudge.algocode.ru/'
+EJUDGE_URL = 'https://ejudge.kpfu.ru/'
 
 CREATE_STATEMENTS = True  # Change it to False if you do not want to create statements for problems
 
 IMPORT_ALL_SOLUTIONS = False  # Change it to True if you want to import all solutions
 
 TEXTAREA_INPUT = True
+
+IMPORT_DIFFERENT_POINTS = True
 
 # TODO: allow changing above options from script
 
@@ -50,6 +52,7 @@ GVALUER_GLOBAL_PART = '''global {
 GVALUER_GROUP_BEGIN = 'group {} {{'
 GVALUER_TESTS = '    tests {}-{};'
 GVALUER_SCORE = '    {}score {};'
+GVALUER_POINTS = '    test_points {};'
 GVALUER_REQUIRES = '    requires {};'
 GVALUER_SET_MARKED = '    sets_marked_if_passed {};'
 GVALUER_OFFLINE = '    offline;'
