@@ -85,13 +85,13 @@ def download_problem_package(
 def import_zip_problem(
         ejudge_contest_id: int,
         problem_zip_path: str,
+        problem_dir: str=None,
         polygon_id=None,
         short_name=None,
         ejudge_problem_id=None,
         no_offline=False
 ) -> None:
     contest_dir = get_ejudge_contest_dir(ejudge_contest_id)
-    problems_dir = os.path.join(contest_dir, 'problems')
 
     os.chdir(contest_dir)
 
@@ -121,21 +121,23 @@ def import_zip_problem(
                         i += 1
         ejudge_problem_id = max_problem_id + 1
 
-    if not os.path.exists(problems_dir):
-        os.mkdir(problems_dir)
+    if problem_dir is None:
+        problems_dir = os.path.join(contest_dir, 'problems')
+        if not os.path.exists(problems_dir):
+            os.mkdir(problems_dir)
 
-    problem_zip_name = os.path.basename(problem_zip_path)
-    problem_name = problem_zip_name[:problem_zip_name.rfind(".zip")]
+        problem_zip_name = os.path.basename(problem_zip_path)
+        problem_name = problem_zip_name[:problem_zip_name.rfind(".zip")]
 
-    problems = os.listdir(problems_dir)
-    if problem_name in problems:
-        additional_id = 2
-        while "{}-{}".format(problem_name, additional_id) in problems:
-            additional_id += 1
-        problem_name = "{}-{}".format(problem_name, additional_id)
+        problems = os.listdir(problems_dir)
+        if problem_name in problems:
+            additional_id = 2
+            while "{}-{}".format(problem_name, additional_id) in problems:
+                additional_id += 1
+            problem_name = "{}-{}".format(problem_name, additional_id)
+        problem_dir = os.path.join(problems_dir, problem_name)
 
     try:
-        problem_dir = os.path.join(problems_dir, problem_name)
         os.mkdir(problem_dir)
         os.chdir(problem_dir)
 
@@ -368,6 +370,7 @@ def import_problem(
         short_name=None,
         ejudge_problem_id=None,
         no_offline=False,
+        duplicate=False,
 ) -> None:
     if src_path is not None:
         src_path = os.path.abspath(src_path)
@@ -380,6 +383,8 @@ def import_problem(
         problem_zip_path = download_problem_package(polygon_problem_id)
     else:
         raise ValueError("Neither --src-path not --problem-id are specified")
+
+    if not duplicate
 
     import_zip_problem(
         ejudge_contest_id=ejudge_contest_id,
@@ -494,8 +499,9 @@ def add_subparsers(subparsers):
     parser_import_problem.add_argument('-short', help="Short name for the problem", default=None, type=str)
     parser_import_problem.add_argument('-ej_id', help="Ejudge id for the problem", default=None, type=int)
     parser_import_problem.add_argument('-n', "--no-offline", help="Ignore offline groups in valuer", action="store_true")
+    parser_import_problem.add_argument('-d', "--duplicate", help="Save problems with contest config, enable problem duplicates", action="store_true")
     parser_import_problem.set_defaults(
-        func=lambda options: import_problem(options.contest_id, options.problem_id, options.src_path, options.short, options.ej_id, options.no_offline)
+        func=lambda options: import_problem(options.contest_id, options.problem_id, options.src_path, options.short, options.ej_id, options.no_offline, options.duplicate)
     )
 
     parser_import_contest = subparsers.add_parser(
