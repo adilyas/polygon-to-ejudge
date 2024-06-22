@@ -30,7 +30,13 @@ def update_problem(
         raise Exception("No polygon id found, can not update")
 
     remove_problem(ejudge_contest_id, ejudge_problem_id, keep_config=True)
-    import_problem(ejudge_contest_id, polygon_id, short_name, ejudge_problem_id, no_offline=no_offline)
+    import_problem(
+        ejudge_contest_id=ejudge_contest_id,
+        polygon_problem_id=polygon_id,
+        short_name=short_name,
+        ejudge_problem_id=ejudge_problem_id,
+        no_offline=no_offline,
+    )
 
 
 def update_contest(

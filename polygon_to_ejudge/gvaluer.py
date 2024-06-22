@@ -13,6 +13,7 @@ def get_group_desc(group_id, l, r, score, test_points, requires, test_score, set
     res.append(GVALUER_TESTS.format(l, r))
     if IMPORT_DIFFERENT_POINTS and test_score != '':
         res.append(GVALUER_POINTS.format(', '.join(map(str, test_points))))
+        res.append(GVALUER_SCORE.format('test_', 1)) # это заглушка, т.к. в моем gvaluer есть баг
     else:
         res.append(GVALUER_SCORE.format(test_score, score))
     if len(requires) > 0:

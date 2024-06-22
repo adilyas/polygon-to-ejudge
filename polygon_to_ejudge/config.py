@@ -14,6 +14,8 @@ IMPORT_DIFFERENT_POINTS = True
 
 # TODO: allow changing above options from script
 
+TMP_DOWNLOAD_DIR_PATTERN = "/tmp/polygon-to-ejudge/{suffix}"
+
 LANG_IDS = {
     "py": [23, 64],  # python3 and pypy3
     "cpp": [3, 52],  # g++ and clang
