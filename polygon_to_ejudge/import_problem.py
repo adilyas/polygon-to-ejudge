@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import os
 import shutil
+import re
 import xml.etree.ElementTree as ET
 import zipfile
 import random
@@ -11,7 +12,7 @@ from polygon_cli import config as cli_config
 
 from .common import Config, get_ejudge_contest_dir, UnquotedStr
 from .config import PROBLEM_CFG_START, GVALUER_LOCATION, CREATE_STATEMENTS, IMPORT_ALL_SOLUTIONS, CONVERT_EPS, \
-    IMG_STYLE, IMG_SRC_PREFIX, TEXTAREA_INPUT, IMPORT_ALL_SOLUTIONS
+    IMG_STYLE, IMG_SRC_PREFIX, TEXTAREA_INPUT, IMPORT_ALL_SOLUTIONS, TMP_DOWNLOAD_DIR_PATTERN
 from .gvaluer import generate_valuer
 from .statement import import_statement, process_statement_xml
 
@@ -61,18 +62,35 @@ def extract_images(statements, src_dir, out_dir):
     return str(st)
 
 
-def import_problem(
-        ejudge_contest_id: int,
+def download_problem_package(
         polygon_id: int,
+) -> str:
+    cli_config.setup_login_by_url('')
+    session = problem.ProblemSession("main", polygon_id, None)
+
+    tmp_dir = TMP_DOWNLOAD_DIR_PATTERN.format(suffix=polygon_id)
+
+    if os.path.isdir(tmp_dir):
+        shutil.rmtree(tmp_dir)
+    os.makedirs(tmp_dir)
+
+    os.chdir(tmp_dir)
+    session.download_last_package()
+
+    problem_zip_name = os.listdir(tmp_dir)[0]
+    problem_zip_path = os.path.abspath(os.path.join(tmp_dir, problem_zip_name))
+
+    return problem_zip_path
+
+def import_zip_problem(
+        ejudge_contest_id: int,
+        problem_zip_path: str,
+        polygon_id=None,
         short_name=None,
         ejudge_problem_id=None,
         no_offline=False
 ) -> None:
-    cli_config.setup_login_by_url('')
-    session = problem.ProblemSession("main", polygon_id, None)
     contest_dir = get_ejudge_contest_dir(ejudge_contest_id)
-    download_dir = os.path.join(contest_dir, 'download')
-    tmp_dir = os.path.join(contest_dir, 'tmp')
     problems_dir = os.path.join(contest_dir, 'problems')
 
     os.chdir(contest_dir)
@@ -103,35 +121,27 @@ def import_problem(
                         i += 1
         ejudge_problem_id = max_problem_id + 1
 
-    if not os.path.exists(download_dir):
-        os.mkdir(download_dir)
-
-    if os.path.isdir(tmp_dir):
-        shutil.rmtree(tmp_dir)
-    os.mkdir(tmp_dir)
-
     if not os.path.exists(problems_dir):
         os.mkdir(problems_dir)
 
-    os.chdir(tmp_dir)
-    session.download_last_package()
-    problems = os.listdir(problems_dir)
-    problem_zip_name = os.listdir(tmp_dir)[0]
+    problem_zip_name = os.path.basename(problem_zip_path)
     problem_name = problem_zip_name[:problem_zip_name.rfind(".zip")]
-    os.replace(os.path.join(tmp_dir, problem_zip_name), os.path.join(download_dir, problem_zip_name))
+
+    problems = os.listdir(problems_dir)
     if problem_name in problems:
         additional_id = 2
         while "{}-{}".format(problem_name, additional_id) in problems:
             additional_id += 1
         problem_name = "{}-{}".format(problem_name, additional_id)
-    problem_dir = os.path.join(problems_dir, problem_name)
+
     try:
+        problem_dir = os.path.join(problems_dir, problem_name)
         os.mkdir(problem_dir)
         os.chdir(problem_dir)
 
         interactor_name = None
 
-        with zipfile.ZipFile(os.path.join(download_dir, problem_zip_name), "r") as zip_file:
+        with zipfile.ZipFile(problem_zip_path, "r") as zip_file:
             zip_file.extract('problem.xml')
             xml_file = open('problem.xml', 'r')
             tree = ET.ElementTree(file=xml_file)
@@ -179,7 +189,7 @@ def import_problem(
                         format_examples = import_statement_res[3]
                         informatics_statements = import_statement_res[1]
                         statement_xml = import_statement_res[0]
-                    if language == 'english':
+                    if False and language == 'english':
                         import_statement_res = import_statement(
                             os.path.join(problem_dir, 'statement-sections', 'english'),
                             'en_EN',
@@ -261,7 +271,8 @@ def import_problem(
         config['long_name'] = russian_name
         problem_config['long_name_en'] = english_name
         config['internal_name'] = problem_name
-        config['extid'] = 'polygon:{}'.format(polygon_id)
+        if polygon_id is not None:
+            config['extid'] = 'polygon:{}'.format(polygon_id)
         problem_config['revision'] = tree.attrib['revision']
         if CREATE_STATEMENTS:
             config['xml_file'] = "statements.xml"
@@ -343,25 +354,133 @@ def import_problem(
 
     except Exception as e:
         os.chdir(contest_dir)
-        shutil.rmtree(problem_dir)
+        #shutil.rmtree(problem_dir)
         old_contest_config.write()
         print("Failed to load problem")
 
         raise e
 
 
-def import_contest(
-        ejudge_id: int,
+def import_problem(
+        ejudge_contest_id: int,
+        polygon_problem_id=None,
+        src_path=None,
+        short_name=None,
+        ejudge_problem_id=None,
+        no_offline=False,
+) -> None:
+    if src_path is not None:
+        src_path = os.path.abspath(src_path)
+        file_name = os.path.basename(src_path)
+        file_name = file_name[:file_name.find('$')]
+        file_name = file_name[:file_name.rfind('-')]
+        src_dir = os.path.dirname(src_path)
+        problem_zip_path = find_zip_and_move(file_name, src_dir)
+    elif polygon_problem_id is not None:
+        problem_zip_path = download_problem_package(polygon_problem_id)
+    else:
+        raise ValueError("Neither --src-path not --problem-id are specified")
+
+    import_zip_problem(
+        ejudge_contest_id=ejudge_contest_id,
+        problem_zip_path=problem_zip_path,
+        polygon_id=polygon_problem_id,
+        short_name=short_name,
+        ejudge_problem_id=ejudge_problem_id,
+        no_offline=no_offline,
+    )
+
+
+def get_problems_polygon(
         polygon_id: int,
-        no_offline=False
 ) -> None:
     cli_config.setup_login_by_url('')
     session = problem.ProblemSession(cli_config.polygon_url, None, None)
     problems = session.send_api_request('contest.problems', {'contestId': polygon_id}, problem_data=False)
     problem_keys = list(problems.keys())
     problem_keys.sort()
+
+    problems_map = {}
     for key in problem_keys:
-        import_problem(ejudge_id, problems[key]['id'], key, no_offline=no_offline)
+        problem_zip_path = download_problem_package(problems[key]['id'])
+        yield key, problem_zip_path, problems[key]['id']
+
+
+def find_zip_and_move(
+        problem_name: str,
+        src_dir: str
+) -> str:
+    problem_zip_name = None
+    for package in os.listdir(src_dir):
+        if package.startswith(problem_name):
+            problem_zip_name = package
+            break
+        if problem_name == package:
+            problem_zip_name = package
+            break
+        p = re.compile(f'{problem_name}-\d\$[a-z]*\.zip')
+        if p.match(package) is not None:
+            problem_zip_name = package
+            break
+    if problem_zip_name is None:
+        raise ValueError(f"problem {problem_name} not found")
+
+    tmp_dir = TMP_DOWNLOAD_DIR_PATTERN.format(suffix="local")
+
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+
+    package_dst = os.path.join(tmp_dir, f"{problem_name}.zip")
+    if os.path.exists(package_dst):
+        os.remove(package_dst)
+
+    shutil.copyfile(os.path.join(src_dir, problem_zip_name), package_dst)
+
+    return package_dst
+
+
+def get_problems_local(
+        descriptor: str,
+        src_dir: str,
+) -> None:
+    tree = ET.parse(descriptor)
+    tree = tree.getroot()
+
+    for problem in tree.find("problems"):
+        key = problem.attrib["index"]
+        problem_name = problem.attrib["url"].strip("/").split("/")[-1]
+
+        problem_zip_path = find_zip_and_move(problem_name, src_dir)
+
+        yield key, problem_zip_path, None
+
+
+def import_contest(
+        ejudge_id: int,
+        polygon_id=None,
+        descriptor=None,
+        src_dir=None,
+        no_offline=False,
+) -> None:
+    if descriptor is not None:
+        if src_dir is None:
+            raise ValueError("--descriptor is specified but --src-dir is not")
+        descriptor = os.path.abspath(descriptor)
+        src_dir = os.path.abspath(src_dir)
+        problems = get_problems_local(descriptor, src_dir)
+    elif polygon_id is not None:
+        problems = get_problems_polygon(polygon_id)
+    else:
+        raise ValueError("Neither --descriptor nor --polygon-id are specified")
+
+    for key, problem_zip_path, polygon_id in problems:
+        import_zip_problem(
+            ejudge_contest_id=ejudge_id,
+            problem_zip_path=problem_zip_path,
+            polygon_id=polygon_id,
+            short_name=key,
+            no_offline=no_offline,
+        )
 
 
 def add_subparsers(subparsers):
@@ -370,12 +489,13 @@ def add_subparsers(subparsers):
         help="Import single problem from polygon"
     )
     parser_import_problem.add_argument('contest_id', help='Id of ejudge contest to add problem', type=int)
-    parser_import_problem.add_argument('problem_id', help='Polygon id for the problem', type=int)
+    parser_import_problem.add_argument('-p', '--problem-id', help='Polygon id for the problem', default=None, type=int)
+    parser_import_problem.add_argument('-s', '--src-path', help='Path to full zip package', default=None, type=str)
     parser_import_problem.add_argument('-short', help="Short name for the problem", default=None, type=str)
     parser_import_problem.add_argument('-ej_id', help="Ejudge id for the problem", default=None, type=int)
     parser_import_problem.add_argument('-n', "--no-offline", help="Ignore offline groups in valuer", action="store_true")
     parser_import_problem.set_defaults(
-        func=lambda options: import_problem(options.contest_id, options.problem_id, options.short, options.ej_id, options.no_offline)
+        func=lambda options: import_problem(options.contest_id, options.problem_id, options.src_path, options.short, options.ej_id, options.no_offline)
     )
 
     parser_import_contest = subparsers.add_parser(
@@ -383,8 +503,16 @@ def add_subparsers(subparsers):
         help="Import contest from polygon to ejudge"
     )
     parser_import_contest.add_argument('ejudge_id', help='Ejudge contest id', type=int)
-    parser_import_contest.add_argument('polygon_id', help='Polygon contest id', type=int)
+    parser_import_contest.add_argument("-p", "--polygon-id", help='Polygon contest id', type=int)
+    parser_import_contest.add_argument(
+        "-d", "--descriptor",
+        help='Path to contest descriptor(contest.xml)',
+        default=None, type=str)
+    parser_import_contest.add_argument(
+        "-s", "--src-dir",
+        help='Path to a directory with full problem zip packages, archive names should match problem names in Polygon',
+        default=None, type=str)
     parser_import_contest.add_argument("-n", "--no-offline", help="Ignore offline groups in valuer", action="store_true")
     parser_import_contest.set_defaults(
-        func=lambda options: import_contest(options.ejudge_id, options.polygon_id, options.no_offline)
+        func=lambda options: import_contest(options.ejudge_id, options.polygon_id, options.descriptor, options.src_dir, options.no_offline)
     )

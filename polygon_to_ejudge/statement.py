@@ -1,7 +1,37 @@
 import os
+import re
 import xml.etree.ElementTree as ET
 
 from .config import *
+
+EPIGRAPH_START = '\\epigraph'
+
+
+def remove_epigraph(text):
+    i = text.find(EPIGRAPH_START)
+    if i == -1:
+        return text
+
+    ans = text[:i]
+
+    def find_closing(start):
+        i = start
+        b = 0
+        while i < len(text):
+            if text[i] == "{":
+                b += 1
+            if text[i] == "}":
+                b -= 1
+            i += 1
+            if b == 0:
+                break
+        return i
+
+    i = find_closing(i + len(EPIGRAPH_START))
+    if i < len(text) and text[i] == "{":
+        i = find_closing(i)
+    ans += text[i:]
+    return ans
 
 
 def latex_to_html(location: str, file_name: str) -> str:
@@ -78,8 +108,9 @@ def import_statement(location: str, language: str):
 
     current_example = None
 
+    example_pat = re.compile(r"example\.\d{2}\.?a?")
     for statement_file in statement_files:
-        if statement_file.startswith('example'):
+        if example_pat.fullmatch(statement_file):
             content = open(os.path.join(location, statement_file), 'r').read()
             format_example.append(content)
 
